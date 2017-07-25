@@ -7,6 +7,8 @@ import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -18,18 +20,33 @@ import butterknife.ButterKnife;
 import butterknife.OnClick;
 
 public class LoginActivity extends AppCompatActivity {
+
+    @BindView(R.id.editText)
+    EditText mEditText;
+    @BindView(R.id.ll_1)
+    LinearLayout mLl1;
+    @BindView(R.id.iv_yanzhengma)
+    ImageView mIvYanzhengma;
     @BindView(R.id.bt_send_yanzhengma)
     TextView mBtSendYanzhengma;
-    @BindView(R.id.editText)
-    EditText et_mobile;
-    @BindView(R.id.editText2)
-    EditText et_pass;
     @BindView(R.id.et_yanzhengma)
-    EditText et_yanzhengma;
-    @BindView(R.id.linearLayout)
-    RelativeLayout mLinearLayout;
-    @BindView(R.id.editText3)
-    EditText mEditText3;
+    EditText mEtYanzhengma;
+    @BindView(R.id.ll_yanzhengma)
+    RelativeLayout mLlYanzhengma;
+    @BindView(R.id.line_yanzhengma)
+    View mLineYanzhengma;
+    @BindView(R.id.et_pass)
+    EditText mEtPass;
+    @BindView(R.id.ll_pass)
+    LinearLayout mLlPass;
+    @BindView(R.id.line_pass)
+    View mLinePass;
+    @BindView(R.id.et_pass2)
+    EditText mEtPass2;
+    @BindView(R.id.ll_pass2)
+    LinearLayout mLlPass2;
+    @BindView(R.id.line_pass2)
+    View mLinePass2;
     private int recLen = 10;
     private boolean flag = true;
     private CallbackOnResponse mCallbackOnResponse;
@@ -47,17 +64,19 @@ public class LoginActivity extends AppCompatActivity {
         }
         getSupportActionBar().hide();
 
-        RxTextView.textChanges(et_mobile).subscribe(charSequence -> {
+        RxTextView.textChanges(mEditText).subscribe(charSequence -> {
             if (charSequence.length() == 11) {
                 if (Utils.isChinaPhoneLegal(charSequence.toString())) {
-                    mLinearLayout.setVisibility(View.VISIBLE);
-                    et_pass.setVisibility(View.VISIBLE);
-                    mEditText3.setVisibility(View.VISIBLE);
+                    mLlPass.setVisibility(View.VISIBLE);
+                    mLlPass2.setVisibility(View.VISIBLE);
+                    mLinePass.setVisibility(View.VISIBLE);
+                    mLinePass2.setVisibility(View.VISIBLE);
                 }
             } else {
-                mLinearLayout.setVisibility(View.GONE);
-                et_pass.setVisibility(View.GONE);
-                mEditText3.setVisibility(View.GONE);
+                mLlPass.setVisibility(View.GONE);
+                mLlPass2.setVisibility(View.GONE);
+                mLinePass.setVisibility(View.GONE);
+                mLinePass2.setVisibility(View.GONE);
             }
 
         });
@@ -92,7 +111,7 @@ public class LoginActivity extends AppCompatActivity {
     public void onViewClicked(View view) {
         switch (view.getId()) {
             case R.id.bt_send_yanzhengma:
-                if (flag && !et_mobile.getText().toString().equals("")) {
+                if (flag && !mEditText.getText().toString().equals("")) {
                     flag = false;
                     mBtSendYanzhengma.setClickable(false);
                     handler.post(runnable);
