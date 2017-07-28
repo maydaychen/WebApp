@@ -1,11 +1,14 @@
 package com.example.user.webapp;
 
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -47,6 +50,10 @@ public class LoginActivity extends AppCompatActivity {
     LinearLayout mLlPass2;
     @BindView(R.id.line_pass2)
     View mLinePass2;
+    @BindView(R.id.imageView)
+    ImageView mImageView;
+    @BindView(R.id.ll_login)
+    LinearLayout mLlLogin;
     private int recLen = 10;
     private boolean flag = true;
     private CallbackOnResponse mCallbackOnResponse;
@@ -56,6 +63,7 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
         ButterKnife.bind(this);
+        WindowManager wm = this.getWindowManager();
         if (Build.VERSION.SDK_INT >= 21) {
             View decorView = getWindow().getDecorView();
             int option = View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
@@ -81,12 +89,13 @@ public class LoginActivity extends AppCompatActivity {
 
         });
 
-        mCallbackOnResponse = new CallbackOnResponse() {
-            @Override
-            public void onResponse(Object o) {
+        ObjectAnimator animator = ObjectAnimator.ofFloat(mImageView, "translationY", wm.getDefaultDisplay().getHeight() / 2, 100).setDuration(2000);
 
-            }
-        };
+        ObjectAnimator animator2 = ObjectAnimator.ofFloat(mLlLogin, "alpha", 0, 1).setDuration(2000);
+//
+        AnimatorSet set = new AnimatorSet();
+        set.play(animator2).after(animator);//animator2在显示完animator1之后再显示
+        set.start();
 
     }
 
