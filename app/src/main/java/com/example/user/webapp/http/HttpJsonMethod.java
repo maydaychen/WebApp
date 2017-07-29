@@ -74,8 +74,8 @@ public class HttpJsonMethod {
                 .subscribe(subscriber);
     }
 
-    public void login(Subscriber<JSONObject> subscriber, String access_token, String kapkey, String mobile, String sign, int timestamp) {
-        movieService.login(access_token, kapkey, mobile, sign, timestamp)
+    public void login(Subscriber<JSONObject> subscriber, String access_token, String device_tokens, String kapkey, String mobile, String sign, int timestamp) {
+        movieService.login(access_token, device_tokens, kapkey, mobile, sign, timestamp)
 //                .map(new HttpResultFunc<>())
                 .subscribeOn(Schedulers.io())
                 .unsubscribeOn(Schedulers.io())
@@ -83,8 +83,8 @@ public class HttpJsonMethod {
                 .subscribe(subscriber);
     }
 
-    public void change_token(Subscriber<JSONObject> subscriber,String acc, String access_token,  String sign,int timestamp) {
-        movieService.change_token(acc,access_token, sign, timestamp)
+    public void change_token(Subscriber<JSONObject> subscriber, String acc, String access_token, String sign, int timestamp) {
+        movieService.change_token(acc, access_token, sign, timestamp)
 //                .map(new HttpResultFunc<>())
                 .subscribeOn(Schedulers.io())
                 .unsubscribeOn(Schedulers.io())
@@ -92,8 +92,8 @@ public class HttpJsonMethod {
                 .subscribe(subscriber);
     }
 
-    public void dalete_token(Subscriber<JSONObject> subscriber, String acc,String access_token,  String sign,int timestamp) {
-        movieService.dalete_token(acc,access_token, sign, timestamp)
+    public void dalete_token(Subscriber<JSONObject> subscriber, String acc, String access_token, String sign, int timestamp) {
+        movieService.dalete_token(acc, access_token, sign, timestamp)
 //                .map(new HttpResultFunc<>())
                 .subscribeOn(Schedulers.io())
                 .unsubscribeOn(Schedulers.io())

@@ -1,9 +1,13 @@
 package com.example.user.webapp;
 
 import android.content.Context;
+import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.text.TextUtils;
+import android.util.Base64;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -59,5 +63,25 @@ public class Utils {
             e.printStackTrace();
         }
         return "";
+    }
+
+    public static float dip2px(float dipValue)
+    {
+        final float scale = Resources.getSystem().getDisplayMetrics().density;
+        return  (dipValue * scale + 0.5f);
+    }
+
+    public static Bitmap stringtoBitmap(String string) {
+        //将字符串base64转换成Bitmap类型
+        Bitmap bitmap = null;
+        try {
+            byte[] bitmapArray;
+            string = string.replace("data:image/jpeg;base64,","");
+            bitmapArray = Base64.decode(string, Base64.NO_WRAP);
+            bitmap = BitmapFactory.decodeByteArray(bitmapArray, 0, bitmapArray.length);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return bitmap;
     }
 }

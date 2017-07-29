@@ -4,6 +4,7 @@ import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Build;
@@ -26,10 +27,8 @@ import com.example.user.webapp.http.ProgressSubscriber;
 import com.example.user.webapp.http.SubscriberOnNextListener;
 import com.google.gson.Gson;
 import com.jakewharton.rxbinding.widget.RxTextView;
+import com.umeng.message.PushAgent;
 
-import org.greenrobot.eventbus.EventBus;
-import org.greenrobot.eventbus.Subscribe;
-import org.greenrobot.eventbus.ThreadMode;
 import org.json.JSONObject;
 
 import butterknife.BindView;
@@ -68,23 +67,37 @@ public class LoginActivity extends AppCompatActivity {
     private SubscriberOnNextListener<JSONObject> changeOnNext;
     private SubscriberOnNextListener<JSONObject> logoutOnNext;
     private Gson gson = new Gson();
-    private AccessTokenBean mAccessTokenBean = new AccessTokenBean();
     private SharedPreferences preferences;
     private SharedPreferences.Editor editor;
     private ProgressDialog dialog = null;
+    private PushAgent mPushAgent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
         ButterKnife.bind(this);
-        EventBus.getDefault().register(this);
         if (Build.VERSION.SDK_INT >= 21) {
             View decorView = getWindow().getDecorView();
             int option = View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
             decorView.setSystemUiVisibility(option);
             getWindow().setStatusBarColor(Color.TRANSPARENT);
         }
+        preferences = getSharedPreferences("user", Context.MODE_PRIVATE);
+        editor = preferences.edit();
+        mPushAgent = PushAgent.getInstance(this);
+        editor.putString("device_token", mPushAgent.getRegistrationId());
+        editor.apply();
+
+        if (preferences.getBoolean("autoLog", false)) {
+            int time = (int) (System.currentTimeMillis() / 1000);
+            int session_time = preferences.getInt("session_time", time);
+            if (session_time > time) {
+                finish();
+                startActivity(new Intent(LoginActivity.this, MainActivity.class));
+            }
+        }
+
         getSupportActionBar().hide();
         WindowManager wm = this.getWindowManager();
         ObjectAnimator animator = ObjectAnimator.ofFloat(mImageView, "translationY", wm.getDefaultDisplay().getHeight() / 2 - 300, 100).setDuration(2000);
@@ -93,26 +106,29 @@ public class LoginActivity extends AppCompatActivity {
         set.play(animator2).after(animator);//animator2在显示完animator1之后再显示
         set.start();
 
-        preferences = getSharedPreferences("user", Context.MODE_PRIVATE);
-        editor = preferences.edit();
         getTokenOnNext = resultBean -> {
-            if (resultBean.getInt("statusCode") == 1) {
-                AccessTokenBean indexBean = gson.fromJson(resultBean.toString(), AccessTokenBean.class);
-                mAccessTokenBean = indexBean;
-                editor.putString("access_token", indexBean.getResult().getAccess_token());
-                editor.putString("auth_key", indexBean.getResult().getAuth_key());
-                editor.putInt("access_time", indexBean.getResult().getTimestamp());
-                editor.apply();
-            } else {
-                Toast.makeText(this, resultBean.getString("result"), Toast.LENGTH_SHORT).show();
+            switch (resultBean.getInt("statusCode")) {
+                case 1:
+                    AccessTokenBean indexBean = gson.fromJson(resultBean.toString(), AccessTokenBean.class);
+                    editor.putString("access_token", indexBean.getResult().getAccess_token());
+                    editor.putString("auth_key", indexBean.getResult().getAuth_key());
+                    editor.putInt("access_time", indexBean.getResult().getTimestamp());
+                    editor.apply();
+                    break;
+                case 10003:
+                    Toast.makeText(this, "服务器错误，请稍后再试...", Toast.LENGTH_SHORT).show();
+                    break;
             }
         };
 
         sendOnNext = resultBean -> {
-            if (resultBean.getInt("statusCode") == 1) {
-                Toast.makeText(this, resultBean.getString("result"), Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, resultBean.getString("result"), Toast.LENGTH_SHORT).show();
+            switch (resultBean.getInt("statusCode")) {
+                case 1:
+                    Toast.makeText(this, resultBean.getString("result"), Toast.LENGTH_SHORT).show();
+                    break;
+                case 10003:
+                    Toast.makeText(this, "服务器错误，请稍后再试...", Toast.LENGTH_SHORT).show();
+                    break;
             }
         };
 
@@ -120,20 +136,22 @@ public class LoginActivity extends AppCompatActivity {
             if (resultBean.getInt("statusCode") == 1) {
                 Toast.makeText(this, "登录成功！", Toast.LENGTH_SHORT).show();
                 LoginBean indexBean = gson.fromJson(resultBean.toString(), LoginBean.class);
-
                 editor.putString("sessionkey", indexBean.getResult().getSessionkey());
-                editor.putLong("session_time", indexBean.getResult().getTimestamp());
+                editor.putInt("session_time", indexBean.getResult().getTimestamp());
+                editor.putBoolean("autoLog", true);
                 editor.apply();
-//                startActivity(new Intent(LoginActivity.this, MainActivity.class));
+                finish();
+                startActivity(new Intent(LoginActivity.this, MainActivity.class));
                 int time = (int) (System.currentTimeMillis() / 1000);
                 String sign = "";
                 sign = sign + "sessionkey=" + preferences.getString("sessionkey", "") + "&";
                 sign = sign + "timestamp=" + time + "&";
-                sign = sign + "key=" + mAccessTokenBean.getResult().getAuth_key();
+                sign = sign + "key=" + preferences.getString("auth_key", "");
                 sign = md5(sign);
-                HttpJsonMethod.getInstance().change_token(
-                        new ProgressSubscriber(changeOnNext, LoginActivity.this), mAccessTokenBean.getResult().getAccess_token(),
-                        preferences.getString("sessionkey", ""), sign, time);
+
+//                HttpJsonMethod.getInstance().change_token(
+//                        new ProgressSubscriber(changeOnNext, LoginActivity.this), preferences.getString("access_token", ""),
+//                        preferences.getString("sessionkey", ""), sign, time);
             }
         };
 
@@ -144,25 +162,25 @@ public class LoginActivity extends AppCompatActivity {
                 editor.putString("sessionkey", indexBean.getResult().getSessionkey());
                 editor.putInt("session_time", indexBean.getResult().getTimestamp());
                 editor.apply();
-                int time = (int) (System.currentTimeMillis() / 1000);
-                String sign = "";
-                sign = sign + "sessionkey=" + preferences.getString("sessionkey", "") + "&";
-                sign = sign + "timestamp=" + time + "&";
-                sign = sign + "key=" + mAccessTokenBean.getResult().getAuth_key();
-                sign = md5(sign);
-                HttpJsonMethod.getInstance().dalete_token(
-                        new ProgressSubscriber(logoutOnNext, LoginActivity.this), mAccessTokenBean.getResult().getAccess_token(),
-                        preferences.getString("sessionkey", ""), sign, time);
+//                int time = (int) (System.currentTimeMillis() / 1000);
+//                String sign = "";
+//                sign = sign + "sessionkey=" + preferences.getString("sessionkey", "") + "&";
+//                sign = sign + "timestamp=" + time + "&";
+//                sign = sign + "key=" + preferences.getString("auth_key", "");
+//                sign = md5(sign);
+//                HttpJsonMethod.getInstance().dalete_token(
+//                        new ProgressSubscriber(logoutOnNext, LoginActivity.this), preferences.getString("access_token", ""),
+//                        preferences.getString("sessionkey", ""), sign, time);
             }
         };
 
-        logoutOnNext = resultBean -> {
-            if (resultBean.getInt("statusCode") == 1) {
-                Toast.makeText(this, "登出成功！", Toast.LENGTH_SHORT).show();
-                editor.putString("sessionkey", "");
-                editor.apply();
-            }
-        };
+//        logoutOnNext = resultBean -> {
+//            if (resultBean.getInt("statusCode") == 1) {
+//                Toast.makeText(this, "登出成功！", Toast.LENGTH_SHORT).show();
+//                editor.putString("sessionkey", "");
+//                editor.apply();
+//            }
+//        };
 
         RxTextView.textChanges(mEditText).subscribe(charSequence -> {
             if (charSequence.length() == 11) {
@@ -205,11 +223,11 @@ public class LoginActivity extends AppCompatActivity {
                     String sign = "";
                     sign = sign + "mobile=" + tele + "&";
                     sign = sign + "timestamp=" + time + "&";
-                    sign = sign + "key=" + mAccessTokenBean.getResult().getAuth_key();
+                    sign = sign + "key=" + preferences.getString("auth_key", "");
                     sign = md5(sign);
                     editor.putString("username", tele);
                     HttpJsonMethod.getInstance().send_code(
-                            new ProgressSubscriber(sendOnNext, LoginActivity.this), mAccessTokenBean.getResult().getAccess_token(), tele,
+                            new ProgressSubscriber(sendOnNext, LoginActivity.this), preferences.getString("access_token", ""), tele,
                             sign, time);
                 } else {
                     Toast.makeText(LoginActivity.this, "请填写手机号！", Toast.LENGTH_SHORT).show();
@@ -220,51 +238,16 @@ public class LoginActivity extends AppCompatActivity {
                 String yan = mEtYanzhengma.getText().toString();
                 String sign = "";
                 int time = (int) (System.currentTimeMillis() / 1000);
+                sign = sign + "device_tokens=" + mPushAgent.getRegistrationId() + "&";
                 sign = sign + "kapkey=" + mEtYanzhengma.getText().toString() + "&";
                 sign = sign + "mobile=" + tele1 + "&";
                 sign = sign + "timestamp=" + time + "&";
-                sign = sign + "key=" + mAccessTokenBean.getResult().getAuth_key();
+                sign = sign + "key=" + preferences.getString("auth_key", "");
                 sign = md5(sign);
                 HttpJsonMethod.getInstance().login(
-                        new ProgressSubscriber(loginOnNext, LoginActivity.this), mAccessTokenBean.getResult().getAccess_token(), mEtYanzhengma.getText().toString(), tele1,
-                        sign, time);
+                        new ProgressSubscriber(loginOnNext, LoginActivity.this), preferences.getString("access_token", ""),
+                        mPushAgent.getRegistrationId(), mEtYanzhengma.getText().toString(), tele1, sign, time);
                 break;
         }
-    }
-
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    public void onMoonEvent(RefreshMessage loginInfoMessage) {
-        switch (loginInfoMessage.refresh) {
-            case 1:
-                refreshSession();
-                break;
-            case 2:
-                refreshAccess();
-                break;
-        }
-    }
-
-    private void refreshSession() {
-        int time = (int) (System.currentTimeMillis() / 1000);
-        String sign = "";
-        sign = sign + "sessionkey=" + preferences.getString("sessionkey", "") + "&";
-        sign = sign + "timestamp=" + time + "&";
-        sign = sign + "key=" + mAccessTokenBean.getResult().getAuth_key();
-        sign = md5(sign);
-        HttpJsonMethod.getInstance().change_token(
-                new ProgressSubscriber(changeOnNext, LoginActivity.this), mAccessTokenBean.getResult().getAccess_token(),
-                preferences.getString("sessionkey", ""), sign, time);
-    }
-
-    private void refreshAccess() {
-        int time = (int) (System.currentTimeMillis() / 1000);
-        String sign = "";
-        sign = sign + "mobile=" + preferences.getString("username", "") + "&";
-        sign = sign + "timestamp=" + time + "&";
-        sign = sign + "key=" + mAccessTokenBean.getResult().getAuth_key();
-        sign = md5(sign);
-        HttpJsonMethod.getInstance().send_code(
-                new ProgressSubscriber(sendOnNext, LoginActivity.this), mAccessTokenBean.getResult().getAccess_token(), preferences.getString("username", ""),
-                sign, time);
     }
 }

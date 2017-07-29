@@ -1,7 +1,7 @@
 package com.example.user.webapp.http;
 
 import android.content.Context;
-import android.widget.Toast;
+import android.util.Log;
 
 import org.json.JSONException;
 
@@ -32,7 +32,8 @@ public class ProgressSubscriber<T> extends Subscriber<T> {
 
     @Override
     public void onError(Throwable e) {
-        Toast.makeText(context, "error:" + e.getMessage(), Toast.LENGTH_SHORT).show();
+//        Toast.makeText(context, "err" + e.getMessage(), Toast.LENGTH_SHORT).show();
+        Log.e("======================>", e.getMessage().toString());
     }
 
     @Override

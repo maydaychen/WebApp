@@ -41,8 +41,8 @@ public interface BlueService {
     @Headers("addons: ewei_shop")
     @FormUrlEncoded
     @POST("/login")
-    rx.Observable<JSONObject> login(@Field("access_token") String access_token, @Field("kapkey") String kapkey, @Field("mobile") String mobile,
-                                    @Field("sign") String sign, @Field("timestamp") int timestamp);
+    rx.Observable<JSONObject> login(@Field("access_token") String access_token, @Query("device_tokens") String device_tokens, @Field("kapkey") String kapkey,
+                                    @Field("mobile") String mobile, @Field("sign") String sign, @Field("timestamp") int timestamp);
 
     @Headers("addons: ewei_shop")
     @FormUrlEncoded
@@ -52,6 +52,6 @@ public interface BlueService {
 
     @Headers("addons: ewei_shop")
     @DELETE("/login/sessionkey")
-    rx.Observable<JSONObject> dalete_token(@Query("access_token") String access_token,@Query("sessionkey") String sessionkey,
+    rx.Observable<JSONObject> dalete_token(@Query("access_token") String access_token, @Query("sessionkey") String sessionkey,
                                            @Query("sign") String sign, @Query("timestamp") int timestamp);
 }
