@@ -46,6 +46,8 @@ dependencies {
     compile 'org.greenrobot:eventbus:3.0.0'
     compile 'com.squareup.retrofit2:retrofit:2.1.0'
     compile 'com.squareup.retrofit2:converter-gson:2.1.0'
+    compile 'cz.msebera.android:httpclient:4.3.6'
     compile 'com.squareup.retrofit2:adapter-rxjava:2.1.0'
+    compile project(':PushSDK')
     testCompile 'junit:junit:4.12'
 }

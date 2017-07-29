@@ -18,6 +18,15 @@
         </activity>
         <activity android:name=".MainActivity">
         </activity>
+
+        <meta-data
+            android:name="UMENG_APPKEY"
+            android:value="597bf8dc734be434b40013e9">
+        </meta-data>
+        <meta-data
+            android:name="UMENG_MESSAGE_SECRET"
+            android:value="cc31b14504d10f23631cef2dc915ca1d">
+        </meta-data>
     </application>
 
 </manifest>

@@ -1,5 +1,7 @@
 package com.example.user.webapp;
 
+import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -9,6 +11,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -16,14 +19,26 @@ import android.widget.Button;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
+import com.github.lzyzsd.jsbridge.BridgeHandler;
 import com.github.lzyzsd.jsbridge.BridgeWebView;
 import com.github.lzyzsd.jsbridge.BridgeWebViewClient;
+import com.github.lzyzsd.jsbridge.CallBackFunction;
 import com.github.lzyzsd.jsbridge.DefaultHandler;
+import com.google.gson.Gson;
+import com.loopj.android.http.AsyncHttpClient;
+import com.loopj.android.http.AsyncHttpResponseHandler;
+import com.loopj.android.http.RequestParams;
 
 import org.greenrobot.eventbus.EventBus;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.HashMap;
+import java.util.Iterator;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
+import cz.msebera.android.httpclient.Header;
 
 import static com.alipay.android.phone.mrpc.core.NetworkUtils.isNetworkAvailable;
 
@@ -88,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 int a = (int) (System.currentTimeMillis() / 1000);
                 int b = preferences.getInt("session_time", 0);
-                int c = preferences.getInt("access_time",0);
+                int c = preferences.getInt("access_time", 0);
                 if (a + 3 * 24 * 60 * 60 * 1000 > b) {
                     RefreshMessage msg = new RefreshMessage(1);
                     EventBus.getDefault().post(msg);
@@ -96,6 +111,9 @@ public class MainActivity extends AppCompatActivity {
                 if (a + 3 * 24 * 60 * 60 * 1000 > c) {
                     RefreshMessage msg = new RefreshMessage(2);
                     EventBus.getDefault().post(msg);
+                }
+                if (a < b || a < c) {
+                    logout(MainActivity.this);
                 }
                 return super.shouldOverrideUrlLoading(view, url);
             }
@@ -120,10 +138,84 @@ public class MainActivity extends AppCompatActivity {
 //                super.onReceivedError(view, errorCode, description, failingUrl);
             }
         });
+
+        webView.registerHandler("requestx", new BridgeHandler() {
+            @Override
+            public void handler(String responseData, CallBackFunction function) {
+                try {
+                    HashMap<String, String> data = new HashMap<String, String>();
+                    JSONObject jsonObject = new JSONObject(responseData);
+                    JSONObject a = jsonObject.getJSONObject("params").getJSONObject("data");
+                    Iterator it = jsonObject.keys();
+                    AsyncHttpClient client = new AsyncHttpClient();
+                    client.setConnectTimeout(5000);
+                    RequestParams params = new RequestParams();
+                    String URL = jsonObject.getJSONObject("params").getString("url");
+                    // 遍历jsonObject数据，添加到Map对象
+                    while (it.hasNext()) {
+                        String key = String.valueOf(it.next());
+                        String value = (String) a.get(key);
+                        params.add(key, value);
+                    }
+                    if (jsonObject.getJSONObject("params").getString("method").equals("GET")) {
+                        client.get(URL, params, new AsyncHttpResponseHandler() {
+                            @Override
+                            public void onSuccess(int i, Header[] headers, byte[] bytes) {
+                                String result = new String(bytes);
+                                Gson gson = new Gson();
+                                String test = "{\"statusCode\":\"0\", \"data\":";
+                                test += result + "}";
+                                webView.callHandler("request", test, new CallBackFunction() {
+                                    @Override
+                                    public void onCallBack(String data) {
+                                        Log.i("=============>", "test result is " + data);
+                                        Toast.makeText(MainActivity.this, "1", Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onFailure(int i, Header[] headers, byte[] bytes, Throwable throwable) {
+                                Toast.makeText(MainActivity.this, "网络异常，请检查网络状态", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+
+                    } else {
+                        client.post(URL, params, new AsyncHttpResponseHandler() {
+                            @Override
+                            public void onSuccess(int i, Header[] headers, byte[] bytes) {
+                                String result = new String(bytes);
+                                Gson gson = new Gson();
+                                String test = "{\"statusCode\":\"0\", \"data\":";
+                                test += result + "}";
+                                webView.callHandler("request", test, new CallBackFunction() {
+                                    @Override
+                                    public void onCallBack(String data) {
+                                        Log.i("=============>", "test result is " + data);
+                                        Toast.makeText(MainActivity.this, "1", Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+
+                            }
+
+                            @Override
+                            public void onFailure(int i, Header[] headers, byte[] bytes, Throwable throwable) {
+                                Toast.makeText(MainActivity.this, "网络异常，请检查网络状态", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            private void log(String responseData) {
+            }
+//
+        });
     }
 
     public class IntenterBoradCastReceiver extends BroadcastReceiver {
-
         private ConnectivityManager mConnectivityManager;
         private NetworkInfo netInfo;
 
@@ -149,6 +241,24 @@ public class MainActivity extends AppCompatActivity {
         //添加动作，监听网络
         filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
         registerReceiver(receiver, filter);
+    }
+
+    public static void logout(Activity context) {
+        new AlertDialog.Builder(context)
+                .setTitle("警告")
+                .setMessage("账号验证失效，请重新登录！")
+                .setPositiveButton("确定", (dialog, which) -> {
+                    SharedPreferences mySharedPreferences = context.getSharedPreferences("user",
+                            Activity.MODE_PRIVATE);
+                    SharedPreferences.Editor editor = mySharedPreferences.edit();
+                    editor.putBoolean("autoLog", false);
+                    if (editor.commit()) {
+                        context.finish();
+                        Intent intent = new Intent(context, LoginActivity.class);
+                        context.startActivity(intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK));
+                    }
+                })
+                .show();
     }
 
 }
