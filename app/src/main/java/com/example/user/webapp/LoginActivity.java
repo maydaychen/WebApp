@@ -65,7 +65,6 @@ public class LoginActivity extends AppCompatActivity {
     private SubscriberOnNextListener<JSONObject> sendOnNext;
     private SubscriberOnNextListener<JSONObject> loginOnNext;
     private SubscriberOnNextListener<JSONObject> changeOnNext;
-    private SubscriberOnNextListener<JSONObject> logoutOnNext;
     private Gson gson = new Gson();
     private SharedPreferences preferences;
     private SharedPreferences.Editor editor;
@@ -87,7 +86,7 @@ public class LoginActivity extends AppCompatActivity {
         editor = preferences.edit();
         mPushAgent = PushAgent.getInstance(this);
         editor.putString("device_token", mPushAgent.getRegistrationId());
-        editor.apply();
+        editor.commit();
 
         if (preferences.getBoolean("autoLog", false)) {
             int time = (int) (System.currentTimeMillis() / 1000);
@@ -162,15 +161,6 @@ public class LoginActivity extends AppCompatActivity {
                 editor.putString("sessionkey", indexBean.getResult().getSessionkey());
                 editor.putInt("session_time", indexBean.getResult().getTimestamp());
                 editor.apply();
-//                int time = (int) (System.currentTimeMillis() / 1000);
-//                String sign = "";
-//                sign = sign + "sessionkey=" + preferences.getString("sessionkey", "") + "&";
-//                sign = sign + "timestamp=" + time + "&";
-//                sign = sign + "key=" + preferences.getString("auth_key", "");
-//                sign = md5(sign);
-//                HttpJsonMethod.getInstance().dalete_token(
-//                        new ProgressSubscriber(logoutOnNext, LoginActivity.this), preferences.getString("access_token", ""),
-//                        preferences.getString("sessionkey", ""), sign, time);
             }
         };
 

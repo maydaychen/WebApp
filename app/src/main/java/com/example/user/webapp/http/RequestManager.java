@@ -3,9 +3,12 @@ package com.example.user.webapp.http;
 import android.content.Context;
 import android.util.Base64;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.example.user.webapp.MainActivity;
 import com.example.user.webapp.bean.BaseBean;
+
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -54,19 +57,21 @@ public class RequestManager {
         bodyBuilder.add("timestamp", time + "");
         Log.d("wjj",fileToBase64(headPicFile));
         RequestBody requestBody = bodyBuilder.build();
-        Call<BaseBean> call = request.getAva(requestBody);
+        Call<JSONObject> call = request.getAva(requestBody);
         final MainActivity activity = (MainActivity) context;
-        call.enqueue(new Callback<BaseBean>() {
+        call.enqueue(new Callback<JSONObject>() {
             @Override
-            public void onResponse(Call<BaseBean> call, Response<BaseBean> response) {
-                String msg = response.body().getMessage();
+            public void onResponse(Call<JSONObject> call, Response<JSONObject> response) {
+                String msg = response.toString();
+                Toast.makeText(activity, msg, Toast.LENGTH_SHORT).show();
                 activity.deletePic();
                 Log.d("wjj",msg);
                 activity.getResult(msg);
             }
 
             @Override
-            public void onFailure(Call<BaseBean> call, Throwable t) {
+            public void onFailure(Call<JSONObject> call, Throwable t) {
+                Toast.makeText(activity, "上传失败，请稍后再试", Toast.LENGTH_SHORT).show();
                 Log.d("wjj","err");
                 activity.deletePic();
                 t.printStackTrace();

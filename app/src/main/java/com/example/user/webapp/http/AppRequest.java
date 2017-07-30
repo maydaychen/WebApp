@@ -3,9 +3,13 @@ package com.example.user.webapp.http;
 
 import com.example.user.webapp.bean.BaseBean;
 
+import org.json.JSONObject;
+
 import okhttp3.RequestBody;
 import retrofit2.Call;
 import retrofit2.http.Body;
+import retrofit2.http.FormUrlEncoded;
+import retrofit2.http.Headers;
 import retrofit2.http.POST;
 
 /**
@@ -13,9 +17,9 @@ import retrofit2.http.POST;
  */
 
 public interface AppRequest {
-
+    @Headers("addons: ewei_shop")
     @POST("/uploads")
-    Call<BaseBean> getAva(@Body RequestBody updatedBody);
+    Call<JSONObject> getAva(@Body RequestBody updatedBody);
  /*   @Multipart
     @POST(HttpConstants.PHOTO_URL)
     Call<BaseBean> postPhoto(@PartMap Map<String, RequestBody> params);*/

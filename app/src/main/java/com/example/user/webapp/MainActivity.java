@@ -36,6 +36,7 @@ import android.widget.RelativeLayout;
 import android.widget.Toast;
 
 import com.baoyz.actionsheet.ActionSheet;
+import com.example.user.webapp.alipay.AliPayManager;
 import com.example.user.webapp.alipay.AliPayMessage;
 import com.example.user.webapp.bean.AccessTokenBean;
 import com.example.user.webapp.bean.LoginBean;
@@ -45,7 +46,9 @@ import com.example.user.webapp.http.HttpJsonMethod;
 import com.example.user.webapp.http.ProgressSubscriber;
 import com.example.user.webapp.http.RequestManager;
 import com.example.user.webapp.http.SubscriberOnNextListener;
+import com.example.user.webapp.wxapi.pay.WXPayEntry;
 import com.example.user.webapp.wxapi.pay.WXPayMessage;
+import com.example.user.webapp.wxapi.pay.WXUtils;
 import com.github.lzyzsd.jsbridge.BridgeHandler;
 import com.github.lzyzsd.jsbridge.BridgeWebView;
 import com.github.lzyzsd.jsbridge.BridgeWebViewClient;
@@ -62,6 +65,7 @@ import org.greenrobot.eventbus.ThreadMode;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.json.JSONTokener;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -88,6 +92,8 @@ public class MainActivity extends AppCompatActivity {
     Button btn;
     @BindView(R.id.rl_gone)
     RelativeLayout rl_gone;
+    @BindView(R.id.rl_code)
+    RelativeLayout mRlCode;
 
     private String web_url;
     private boolean IS_OK = true;
@@ -95,7 +101,6 @@ public class MainActivity extends AppCompatActivity {
     private IntenterBoradCastReceiver receiver;
     private SharedPreferences preferences;
     private SharedPreferences.Editor editor;
-    private PushAgent mPushAgent;
     private String final_string;
     private AsyncListener mAsyncListener;
     private SubscriberOnNextListener<JSONObject> changeOnNext;
@@ -108,6 +113,8 @@ public class MainActivity extends AppCompatActivity {
     private File picFile;
     private Button cancel;
     private Dialog dialog;
+    private final static String RESPONSE_TEXT_SUCCESS = "{\"statusCode\":\"0\", \"data\":\"\"}";
+    private final static String RESPONSE_TEXT_FAIL = "{\"statusCode\":\"-1\", \"data\":\"\"}";
     private Gson gson = new Gson();
 
     @Override
@@ -118,8 +125,8 @@ public class MainActivity extends AppCompatActivity {
         EventBus.getDefault().register(this);
         getSupportActionBar().hide();
         registerBroadrecevicer();
-        mPushAgent = PushAgent.getInstance(this);
-        mPushAgent.onAppStart();
+        PushAgent pushAgent = PushAgent.getInstance(this);
+        pushAgent.onAppStart();
         preferences = getSharedPreferences("user", Context.MODE_PRIVATE);
         btn.setOnClickListener(v -> {
             webView.loadUrl(web_url);
@@ -148,6 +155,16 @@ public class MainActivity extends AppCompatActivity {
                 editor.putInt("session_time", indexBean.getResult().getTimestamp());
                 editor.apply();
             }
+        };
+        logoutOnNext = resultBean -> {
+            if (resultBean.getInt("statusCode") == 1) {
+                Toast.makeText(this, "登出成功！", Toast.LENGTH_SHORT).show();
+                editor.putString("sessionkey", "");
+                editor.putBoolean("autoLog", false);
+                editor.apply();
+            }
+            finish();
+            startActivity(new Intent(MainActivity.this,LoginActivity.class));
         };
 
         init();
@@ -183,6 +200,13 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setUserAgentString(ua + ";wshoto");
         webView.setDefaultHandler(new DefaultHandler());
         webView.setWebViewClient(new BridgeWebViewClient(webView) {
+
+            @Override
+            public void onLoadResource(WebView view, String url) {
+                Toast.makeText(MainActivity.this, url, Toast.LENGTH_SHORT).show();
+                super.onLoadResource(view, url);
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 Toast.makeText(MainActivity.this, url, Toast.LENGTH_SHORT).show();
@@ -192,6 +216,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                Toast.makeText(MainActivity.this, url, Toast.LENGTH_SHORT).show();
                 long a = (System.currentTimeMillis() / 1000);
                 long b = (long) preferences.getInt("session_time", 0);
                 long c = (long) preferences.getInt("access_time", 0);
@@ -212,6 +237,7 @@ public class MainActivity extends AppCompatActivity {
                 if (IS_OK) {
                     rl_gone.setVisibility(View.INVISIBLE);
                 }
+                Toast.makeText(MainActivity.this, url, Toast.LENGTH_SHORT).show();
                 super.onPageFinished(view, url);
             }
 
@@ -229,40 +255,100 @@ public class MainActivity extends AppCompatActivity {
         });
 
         webView.registerHandler("requestx", (responseData, function) -> net(responseData));
-        webView.registerHandler("uploadImg", new BridgeHandler() {
-            @Override
-            public void handler(String responseData, CallBackFunction function) {
-                try {
-                   /* JSONTokener jsonTokener = new JSONTokener(responseData);
-                    JSONObject wxJson = (JSONObject) jsonTokener.nextValue();*/
-                    ActionSheet.createBuilder(MainActivity.this, getSupportFragmentManager())
-                            .setCancelButtonTitle("Cancel")
-                            .setOtherButtonTitles("相机", "图库")
-                            .setCancelableOnTouchOutside(true)
-                            .setListener(new ActionSheet.ActionSheetListener() {
-                                @Override
-                                public void onDismiss(ActionSheet actionSheet, boolean isCancel) {
+        webView.registerHandler("uploadImg", (responseData, function) -> {
+            try {
+               /* JSONTokener jsonTokener = new JSONTokener(responseData);
+                JSONObject wxJson = (JSONObject) jsonTokener.nextValue();*/
+                ActionSheet.createBuilder(MainActivity.this, getSupportFragmentManager())
+                        .setCancelButtonTitle("Cancel")
+                        .setOtherButtonTitles("相机", "图库")
+                        .setCancelableOnTouchOutside(true)
+                        .setListener(new ActionSheet.ActionSheetListener() {
+                            @Override
+                            public void onDismiss(ActionSheet actionSheet, boolean isCancel) {
 
+                            }
+
+                            @Override
+                            public void onOtherButtonClick(ActionSheet actionSheet, int index) {
+                                if (index == 0) {
+                                    camera();
+                                    Log.d("wjj", "camera");
+                                } else {
+                                    selectImage();
+                                    Log.d("wjj", "selectImage");
                                 }
+                            }
+                        }).show();
 
-                                @Override
-                                public void onOtherButtonClick(ActionSheet actionSheet, int index) {
-                                    if (index == 0) {
-                                        camera();
-                                        Log.d("wjj", "camera");
-                                    } else {
-                                        selectImage();
-                                        Log.d("wjj", "selectImage");
-                                    }
-                                }
-                            }).show();
-
-                    //Toast.makeText(WebAppActivity.this,"uploadImg",Toast.LENGTH_SHORT).show();
+                //Toast.makeText(WebAppActivity.this,"uploadImg",Toast.LENGTH_SHORT).show();
 //                    function.onCallBack(RESPONSE_TEXT_SUCCESS);
-                } catch (Exception e) {
-                    e.printStackTrace();
+            } catch (Exception e) {
+                e.printStackTrace();
 //                    function.onCallBack(RESPONSE_TEXT_FAIL);
+            }
+        });
+        webView.registerHandler("shellQrcode", (responseData, function) -> {
+            try {
+               /* JSONTokener jsonTokener = new JSONTokener(responseData);
+                JSONObject wxJson = (JSONObject) jsonTokener.nextValue();*/
+                ActionSheet.createBuilder(MainActivity.this, getSupportFragmentManager())
+                        .setCancelButtonTitle("取消")
+                        .setOtherButtonTitles("保存到本地")
+                        .setCancelableOnTouchOutside(true)
+                        .setListener(new ActionSheet.ActionSheetListener() {
+                            @Override
+                            public void onDismiss(ActionSheet actionSheet, boolean isCancel) {
+                            }
+
+                            @Override
+                            public void onOtherButtonClick(ActionSheet actionSheet, int index) {
+                                savePicture(getHttpBitmap(responseData));
+                            }
+                        }).show();
+
+                //Toast.makeText(WebAppActivity.this,"uploadImg",Toast.LENGTH_SHORT).show();
+//                    function.onCallBack(RESPONSE_TEXT_SUCCESS);
+            } catch (Exception e) {
+                e.printStackTrace();
+//                    function.onCallBack(RESPONSE_TEXT_FAIL);
+            }
+        });
+        webView.registerHandler("logOut", (responseData, function) -> {
+                            int time = (int) (System.currentTimeMillis() / 1000);
+            String sign = "";
+            sign = sign + "sessionkey=" + preferences.getString("sessionkey", "") + "&";
+            sign = sign + "timestamp=" + time + "&";
+            sign = sign + "key=" + preferences.getString("auth_key", "");
+            sign = md5(sign);
+            HttpJsonMethod.getInstance().dalete_token(
+                    new ProgressSubscriber(logoutOnNext, MainActivity.this), preferences.getString("access_token", ""),
+                    preferences.getString("sessionkey", ""), sign, time);
+        });
+        webView.registerHandler("payment", (responseData, function) -> {
+            try {
+                JSONTokener jsonTokener = new JSONTokener(responseData);
+                JSONObject wxJson = (JSONObject) jsonTokener.nextValue();
+                Log.d("wjj","payment1");
+                String type = wxJson.getString("type");
+                String params = wxJson.getString("params");
+                Log.d("wjj",params);
+                if ("wechat".equals(type)) {
+                    Log.d("wjj","payment2");
+                    WXPayEntry entry = WXUtils.parseWXData(params);
+                    if (entry != null) {
+                        Log.d("wjj","payment3");
+                        WXUtils.startWeChat(MainActivity.this, entry);
+                        function.onCallBack(RESPONSE_TEXT_SUCCESS);
+                    } else {
+                        function.onCallBack(RESPONSE_TEXT_FAIL);
+                    }
+                } else if ("alipay".equals(type)) {
+                    AliPayManager.getInstance().payV2(MainActivity.this, params);
+                    function.onCallBack(RESPONSE_TEXT_SUCCESS);
                 }
+            } catch (JSONException e) {
+                function.onCallBack(RESPONSE_TEXT_FAIL);
             }
         });
 
@@ -302,7 +388,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         ActionSheet.createBuilder(MainActivity.this, getSupportFragmentManager())
-                .setCancelButtonTitle("Cancel")
+                .setCancelButtonTitle("取消")
                 .setOtherButtonTitles("相机", "图库")
                 .setCancelableOnTouchOutside(true)
                 .setListener(new ActionSheet.ActionSheetListener() {
@@ -353,8 +439,6 @@ public class MainActivity extends AppCompatActivity {
             InputStream in = pictureUrl.openStream();
             bitmap = BitmapFactory.decodeStream(in);
             in.close();
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -430,12 +514,7 @@ public class MainActivity extends AppCompatActivity {
         String payString = payMessage.getJsonString();
         Log.i("wjj", "onMoonEvent AliPayMessage " + payString);
 
-        webView.callHandler("payment", payString, new CallBackFunction() {
-            @Override
-            public void onCallBack(String data) {
-                Log.i("wjj", "callHandler AliPayMessage result " + data);
-            }
-        });
+        webView.callHandler("payment", payString, data -> Log.i("wjj", "callHandler AliPayMessage result " + data));
         //webview.send(payString);
     }
 
@@ -445,12 +524,7 @@ public class MainActivity extends AppCompatActivity {
         String payString = payMessage.getJsonString();
         Log.i("wjj", "onMoonEvent WXPayMessage " + payString);
         //java调用js，通知服务端支付完成
-        webView.callHandler("payment", payString, new CallBackFunction() {
-            @Override
-            public void onCallBack(String jsResponseData) {
-                Log.i("wjj", "callHandler WXPayMessage result " + jsResponseData);
-            }
-        });
+        webView.callHandler("payment", payString, jsResponseData -> Log.i("wjj", "callHandler WXPayMessage result " + jsResponseData));
     }
 
     @Override
@@ -704,7 +778,7 @@ public class MainActivity extends AppCompatActivity {
 //        intent.setType("image/*");
         Intent intent;
         if (Build.VERSION.SDK_INT >= 23) {
-            intent = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
             intent.setType("image/*");
         } else {
             intent = new Intent(Intent.ACTION_GET_CONTENT);
@@ -823,4 +897,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
+
 }
