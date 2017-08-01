@@ -101,4 +101,13 @@ public class HttpJsonMethod {
                 .subscribe(subscriber);
     }
 
+    public void getAva(Subscriber<JSONObject> subscriber, String access_token, String avatar, String session, String sign, int timestamp) {
+        movieService.getAva(access_token, avatar, session, sign, timestamp)
+//                .map(new HttpResultFunc<>())
+                .subscribeOn(Schedulers.io())
+                .unsubscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(subscriber);
+    }
+
 }

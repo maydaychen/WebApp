@@ -9,6 +9,7 @@ import android.net.NetworkInfo;
 import android.text.TextUtils;
 import android.util.Base64;
 
+import java.io.ByteArrayOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.regex.Matcher;
@@ -83,5 +84,15 @@ public class Utils {
             e.printStackTrace();
         }
         return bitmap;
+    }
+
+    public static String bitmaptoString(Bitmap bitmap) {
+//将Bitmap转换成字符串
+        String string = null;
+        ByteArrayOutputStream bStream = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, bStream);
+        byte[] bytes = bStream.toByteArray();
+        string = Base64.encodeToString(bytes, Base64.DEFAULT);
+        return string;
     }
 }

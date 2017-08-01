@@ -9,7 +9,7 @@
 
     <com.github.lzyzsd.jsbridge.BridgeWebView
         android:id="@+id/wv_main"
-        android:layout_width="368dp"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_marginTop="0dp"/>
 

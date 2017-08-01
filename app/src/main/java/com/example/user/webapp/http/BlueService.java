@@ -54,4 +54,11 @@ public interface BlueService {
     @DELETE("/login/sessionkey")
     rx.Observable<JSONObject> dalete_token(@Query("access_token") String access_token, @Query("sessionkey") String sessionkey,
                                            @Query("sign") String sign, @Query("timestamp") int timestamp);
+
+
+    @Headers({"Content-Type:application/x-www-form-urlencoded", "addons: ewei_shop"})
+    @FormUrlEncoded
+    @POST("/uploads")
+    rx.Observable<JSONObject> getAva(@Field("access_token") String access_token, @Field("avatar") String avatar,
+                                     @Field("sessionkey") String sessionkey, @Field("sign") String sign, @Field("timestamp") int timestamp);
 }

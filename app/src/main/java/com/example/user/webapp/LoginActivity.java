@@ -1,18 +1,19 @@
 package com.example.user.webapp;
 
+import android.animation.Animator;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
-import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.Point;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
+import android.view.Display;
 import android.view.View;
-import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -35,6 +36,7 @@ import butterknife.BindView;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
 
+import static com.example.user.webapp.Utils.dip2px;
 import static com.example.user.webapp.Utils.isChinaPhoneLegal;
 import static com.example.user.webapp.Utils.md5;
 
@@ -58,6 +60,14 @@ public class LoginActivity extends AppCompatActivity {
     LinearLayout mLlLogin;
     @BindView(R.id.imageView)
     ImageView mImageView;
+    @BindView(R.id.iv_start)
+    LinearLayout mIvStart;
+    @BindView(R.id.rl_login)
+    RelativeLayout mRlLogin;
+    @BindView(R.id.tv_support)
+    TextView mTvSupport;
+    @BindView(R.id.test)
+    ImageView mTest;
 
     private int recLen = 10;
     private boolean flag = true;
@@ -65,11 +75,12 @@ public class LoginActivity extends AppCompatActivity {
     private SubscriberOnNextListener<JSONObject> sendOnNext;
     private SubscriberOnNextListener<JSONObject> loginOnNext;
     private SubscriberOnNextListener<JSONObject> changeOnNext;
+    private Loading_view loading;
     private Gson gson = new Gson();
     private SharedPreferences preferences;
     private SharedPreferences.Editor editor;
-    private ProgressDialog dialog = null;
     private PushAgent mPushAgent;
+    private boolean IS_SHOWING = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,30 +93,73 @@ public class LoginActivity extends AppCompatActivity {
             decorView.setSystemUiVisibility(option);
             getWindow().setStatusBarColor(Color.TRANSPARENT);
         }
+        loading = new Loading_view(this, R.style.CustomDialog);
         preferences = getSharedPreferences("user", Context.MODE_PRIVATE);
         editor = preferences.edit();
         mPushAgent = PushAgent.getInstance(this);
         editor.putString("device_token", mPushAgent.getRegistrationId());
         editor.commit();
-
-        if (preferences.getBoolean("autoLog", false)) {
-            int time = (int) (System.currentTimeMillis() / 1000);
-            int session_time = preferences.getInt("session_time", time);
-            if (session_time > time) {
-                finish();
-                startActivity(new Intent(LoginActivity.this, MainActivity.class));
-            }
-        }
-
         getSupportActionBar().hide();
-        WindowManager wm = this.getWindowManager();
-        ObjectAnimator animator = ObjectAnimator.ofFloat(mImageView, "translationY", wm.getDefaultDisplay().getHeight() / 2 - 300, 100).setDuration(2000);
-        ObjectAnimator animator2 = ObjectAnimator.ofFloat(mLlLogin, "alpha", 0, 1).setDuration(2000);
-        AnimatorSet set = new AnimatorSet();
-        set.play(animator2).after(animator);//animator2在显示完animator1之后再显示
-        set.start();
+
+        ObjectAnimator first = ObjectAnimator.ofFloat(mTvSupport, "alpha", 1, 0).setDuration(2000);
+        first.addListener(new Animator.AnimatorListener() {
+            @Override
+            public void onAnimationStart(Animator animator) {
+
+            }
+
+            @Override
+            public void onAnimationEnd(Animator animator) {
+                if (preferences.getBoolean("autoLog", false)) {
+                    int time = (int) (System.currentTimeMillis() / 1000);
+                    int session_time = preferences.getInt("session_time", time);
+                    if (session_time > time) {
+                        finish();
+                        startActivity(new Intent(LoginActivity.this, MainActivity.class));
+                    }
+                } else {
+                    mIvStart.setVisibility(View.GONE);
+                    mRlLogin.setVisibility(View.VISIBLE);
+
+                    Display display = getWindowManager().getDefaultDisplay();
+                    Point size = new Point();
+                    display.getSize(size);
+
+                    int a = mRlLogin.getMeasuredHeight();
+                    int b = mImageView.getMeasuredHeight();
+                    a = a / 2;
+                    ObjectAnimator animator1 = ObjectAnimator.ofFloat(mImageView, "translationY", (a - b - dip2px(50)), 0).setDuration(2000);
+                    ObjectAnimator animator2 = ObjectAnimator.ofFloat(mLlLogin, "alpha", 0, 1).setDuration(2000);
+                    AnimatorSet set = new AnimatorSet();
+                    set.play(animator2).after(animator1);//animator2在显示完animator1之后再显示
+                    set.start();
+                }
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animator) {
+
+            }
+
+            @Override
+            public void onAnimationRepeat(Animator animator) {
+
+            }
+        });
+        first.start();
+
+
+            /* Create an Intent that will start the Main WordPress Activity. */
+
 
         getTokenOnNext = resultBean -> {
+            if (loading != null) {
+                loading.dismiss();
+            }
+            if (IS_SHOWING) {
+                loading.dismiss();
+                IS_SHOWING = false;
+            }
             switch (resultBean.getInt("statusCode")) {
                 case 1:
                     AccessTokenBean indexBean = gson.fromJson(resultBean.toString(), AccessTokenBean.class);
@@ -116,6 +170,9 @@ public class LoginActivity extends AppCompatActivity {
                     break;
                 case 10003:
                     Toast.makeText(this, "服务器错误，请稍后再试...", Toast.LENGTH_SHORT).show();
+                    break;
+                default:
+                    Toast.makeText(this, resultBean.getString("result"), Toast.LENGTH_SHORT).show();
                     break;
             }
         };
@@ -132,6 +189,13 @@ public class LoginActivity extends AppCompatActivity {
         };
 
         loginOnNext = resultBean -> {
+            if (IS_SHOWING) {
+                new Handler().postDelayed(() -> {
+            /* Create an Intent that will start the Main WordPress Activity. */
+                    loading.dismiss();
+                    IS_SHOWING = false;
+                }, 500);
+            }
             if (resultBean.getInt("statusCode") == 1) {
                 Toast.makeText(this, "登录成功！", Toast.LENGTH_SHORT).show();
                 LoginBean indexBean = gson.fromJson(resultBean.toString(), LoginBean.class);
@@ -147,10 +211,8 @@ public class LoginActivity extends AppCompatActivity {
                 sign = sign + "timestamp=" + time + "&";
                 sign = sign + "key=" + preferences.getString("auth_key", "");
                 sign = md5(sign);
-
-//                HttpJsonMethod.getInstance().change_token(
-//                        new ProgressSubscriber(changeOnNext, LoginActivity.this), preferences.getString("access_token", ""),
-//                        preferences.getString("sessionkey", ""), sign, time);
+            } else {
+                Toast.makeText(this, resultBean.getString("result"), Toast.LENGTH_SHORT).show();
             }
         };
 
@@ -175,6 +237,10 @@ public class LoginActivity extends AppCompatActivity {
         RxTextView.textChanges(mEditText).subscribe(charSequence -> {
             if (charSequence.length() == 11) {
                 if (isChinaPhoneLegal(charSequence.toString())) {
+                    if (!IS_SHOWING) {
+                        loading.show();
+                        IS_SHOWING = true;
+                    }
                     HttpJsonMethod.getInstance().get_token(
                             new ProgressSubscriber(getTokenOnNext, LoginActivity.this),
                             "duoyunjia", "69534b32ab51f8cb802720d30fedb523");
@@ -189,7 +255,7 @@ public class LoginActivity extends AppCompatActivity {
         public void run() {
             if (recLen >= 1) {
                 recLen--;
-                mBtSendYanzhengma.setText("重新获取(" + recLen + "s)");
+                mBtSendYanzhengma.setText(recLen + "");
                 handler.postDelayed(this, 1000);
             } else {
                 flag = true;
@@ -226,6 +292,10 @@ public class LoginActivity extends AppCompatActivity {
             case R.id.button:
                 String tele1 = mEditText.getText().toString();
                 String yan = mEtYanzhengma.getText().toString();
+                if (!IS_SHOWING) {
+                    loading.show();
+                    IS_SHOWING = true;
+                }
                 String sign = "";
                 int time = (int) (System.currentTimeMillis() / 1000);
                 sign = sign + "device_tokens=" + mPushAgent.getRegistrationId() + "&";
