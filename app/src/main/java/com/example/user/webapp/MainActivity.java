@@ -70,6 +70,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -90,8 +91,6 @@ import cz.msebera.android.httpclient.Header;
 import static com.example.user.webapp.Config.BASEURL4;
 import static com.example.user.webapp.Utils.bitmaptoString;
 import static com.example.user.webapp.Utils.md5;
-import static com.example.user.webapp.http.RequestManager.fileToBase64;
-import static vi.com.gdi.bgl.android.java.EnvDrawText.bmp;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -133,6 +132,7 @@ public class MainActivity extends AppCompatActivity {
     private String mSaveMessage;
     private String mUrl;
     private Bitmap bmp;
+    private Boolean IS_ALI = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -179,7 +179,7 @@ public class MainActivity extends AppCompatActivity {
             }
         };
         logoutOnNext = resultBean -> {
-            Toast.makeText(this, "登出成功！", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "退出成功！", Toast.LENGTH_SHORT).show();
             editor.putString("sessionkey", "");
             editor.putBoolean("autoLog", false);
             if (editor.commit()) {
@@ -591,6 +591,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void net(String responseData) {
+        Log.i("chenyi", "net=========>: " + responseData);
         if (!IS_SHOWING) {
             loading.show();
             IS_SHOWING = true;
@@ -644,6 +645,11 @@ public class MainActivity extends AppCompatActivity {
                     break;
                 case "POST":
                     if (URL.contains("orders/payment")) {
+                        if (a.getString("type").equals("alipay_app")) {
+                            IS_ALI = true;
+                        } else {
+                            IS_ALI = false;
+                        }
                         client.post(this, URL, params, new AsyncHttpResponseHandler() {
                             @Override
                             public void onSuccess(int i, Header[] headers, byte[] bytes) {
@@ -658,10 +664,12 @@ public class MainActivity extends AppCompatActivity {
                                 try {
                                     JSONObject jsonObject1 = new JSONObject(pay);
                                     String result = jsonObject1.getString("result");
-                                    AliPayManager.getInstance().payV2(MainActivity.this, result);
-                                    webView.callHandler("requestx", RESPONSE_TEXT_SUCCESS, data -> {
-                                        Log.i("=============>", "test result is " + data);
-                                    });
+                                    if (IS_ALI) {
+                                        AliPayManager.getInstance().payV2(MainActivity.this, result);
+                                    }else {
+                                        WXPayEntry entry = WXUtils.parseWXData(result);
+                                        WXUtils.startWeChat(MainActivity.this, entry);
+                                    }
                                 } catch (JSONException e) {
                                     e.printStackTrace();
                                 }
@@ -709,21 +717,32 @@ public class MainActivity extends AppCompatActivity {
             }, 500);
         }
         String result = new String(bytes);
+        Log.i("chenyi", "callResult: ======>" + result);
         try {
             JSONObject object = new JSONObject(result);
             JSONObject newJson = new JSONObject();
-            switch (object.getInt("statusCode")) {
-                case 1:
-                    newJson.put("statusCode", object.getInt("statusCode"));
-                    newJson.put("data", object.get("result"));
-                    final_string = newJson.toString();
+            newJson.put("statusCode", object.getInt("statusCode"));
+            newJson.put("data", object.get("result"));
+            final_string = newJson.toString();
 //                    JSONObject jsonObject = new JSONObject();
 //                    jsonObject.put("statusCode", "1");
 //                    jsonObject.put("data", "");
 //                    String a  = jsonObject.toString();
-                    webView.callHandler("requestx", final_string, data -> {
-                        Log.i("=============>", "test result is " + data);
-                    });
+            webView.callHandler("requestx", final_string, data -> {
+                Log.i("chenyi", "======>test result is " + data);
+            });
+            switch (object.getInt("statusCode")) {
+                case 1:
+//                    newJson.put("statusCode", object.getInt("statusCode"));
+//                    newJson.put("data", object.get("result"));
+//                    final_string = newJson.toString();
+////                    JSONObject jsonObject = new JSONObject();
+////                    jsonObject.put("statusCode", "1");
+////                    jsonObject.put("data", "");
+////                    String a  = jsonObject.toString();
+//                    webView.callHandler("requestx", final_string, data -> {
+//                        Log.i("chenyi", "======>test result is " + data);
+//                    });
                     break;
                 case 10010:
                     logout(MainActivity.this);
@@ -852,10 +871,14 @@ public class MainActivity extends AppCompatActivity {
                         if (bmp != null)//如果不释放的话，不断取图片，将会内存不够
                             bmp.recycle();
                         bmp = BitmapFactory.decodeStream(cr.openInputStream(uri));
-                        int a = bmp.getByteCount();
-                        bmp = Bitmap.createScaledBitmap(bmp, 150, 150, true);
-                        Log.i("wechat", "压缩后图片的大小" + (bmp.getByteCount() / 1024) + "KB宽度为"
-                                + bmp.getWidth() + "高度为" + bmp.getHeight());
+
+//                        bmp = Bitmap.createScaledBitmap(bmp, 150, 150, true);
+//                        Log.i("wechat", "压缩后图片的大小" + (bmp.getByteCount() / 1024) + "KB宽度为"
+//                                + bmp.getWidth() + "高度为" + bmp.getHeight());
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 50, baos);
+                        byte[] bytes = baos.toByteArray();
+                        bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                         upDataHeadImg();
                     } catch (FileNotFoundException e) {
                         // TODO Auto-generated catch block
@@ -868,9 +891,16 @@ public class MainActivity extends AppCompatActivity {
                 // 从拍照返回
                 if (data != null) {
                     bmp = (Bitmap) data.getExtras().get("data");
-                    bmp = Bitmap.createScaledBitmap(bmp, 150, 150, true);
-                    Log.i("wechat", "压缩后图片的大小" + (bmp.getByteCount() / 1024) + "KB宽度为"
-                            + bmp.getWidth() + "高度为" + bmp.getHeight());
+//                    bmp = Bitmap.createScaledBitmap(bmp, 150, 150, true);
+//                    Log.i("wechat", "压缩后图片的大小" + (bmp.getByteCount() / 1024) + "KB宽度为"
+//                            + bmp.getWidth() + "高度为" + bmp.getHeight());
+
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 50, baos);
+                    byte[] bytes = baos.toByteArray();
+                    bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+
+
                     upDataHeadImg();
 
                 }
@@ -1049,13 +1079,13 @@ public class MainActivity extends AppCompatActivity {
         webView.callHandler("uploadImg", result, jsResponseData -> Log.d("wjj", "uploadImg " + jsResponseData));
     }
 
-//    public boolean onKeyDown(int keyCode, KeyEvent event) {
-//        if ((keyCode == KeyEvent.KEYCODE_BACK) && webView.canGoBack()) {
-//            webView.goBack();
-//            return true;
-//        }
-//        return super.onKeyDown(keyCode, event);
-//    }
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if ((keyCode == KeyEvent.KEYCODE_BACK) && webView.canGoBack()) {
+            webView.goBack();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
 
     @Override
     protected void onDestroy() {

@@ -14,6 +14,7 @@ import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.view.Display;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -116,6 +117,20 @@ public class LoginActivity extends AppCompatActivity {
                     if (session_time > time) {
                         finish();
                         startActivity(new Intent(LoginActivity.this, MainActivity.class));
+                    }else {
+                        mIvStart.setVisibility(View.GONE);
+                        mRlLogin.setVisibility(View.VISIBLE);
+                        Display display = getWindowManager().getDefaultDisplay();
+                        Point size = new Point();
+                        display.getSize(size);
+                        int a = mRlLogin.getMeasuredHeight();
+                        int b = mImageView.getMeasuredHeight();
+                        a = a / 2;
+                        ObjectAnimator animator1 = ObjectAnimator.ofFloat(mImageView, "translationY", (a - b - dip2px(50)), 0).setDuration(2000);
+                        ObjectAnimator animator2 = ObjectAnimator.ofFloat(mLlLogin, "alpha", 0, 1).setDuration(2000);
+                        AnimatorSet set = new AnimatorSet();
+                        set.play(animator2).after(animator1);//animator2在显示完animator1之后再显示
+                        set.start();
                     }
                 } else {
                     mIvStart.setVisibility(View.GONE);
@@ -153,6 +168,7 @@ public class LoginActivity extends AppCompatActivity {
 
 
         getTokenOnNext = resultBean -> {
+            mEtYanzhengma.requestFocus();
             if (loading != null) {
                 loading.dismiss();
             }
@@ -247,6 +263,13 @@ public class LoginActivity extends AppCompatActivity {
                 }
             }
         });
+
+        RxTextView.textChanges(mEtYanzhengma).subscribe(charSequence -> {
+            if (charSequence.length() == 6) {
+                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                imm.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(), 0);
+            }
+        });
     }
 
     Handler handler = new Handler();
@@ -298,12 +321,15 @@ public class LoginActivity extends AppCompatActivity {
                 }
                 String sign = "";
                 int time = (int) (System.currentTimeMillis() / 1000);
-                sign = sign + "device_tokens=" + mPushAgent.getRegistrationId() + "&";
+                if (!mPushAgent.getRegistrationId().equals("")) {
+                    sign = sign + "device_tokens=" + mPushAgent.getRegistrationId() + "&";
+                }
                 sign = sign + "kapkey=" + mEtYanzhengma.getText().toString() + "&";
                 sign = sign + "mobile=" + tele1 + "&";
                 sign = sign + "timestamp=" + time + "&";
                 sign = sign + "key=" + preferences.getString("auth_key", "");
                 sign = md5(sign);
+
                 HttpJsonMethod.getInstance().login(
                         new ProgressSubscriber(loginOnNext, LoginActivity.this), preferences.getString("access_token", ""),
                         mPushAgent.getRegistrationId(), mEtYanzhengma.getText().toString(), tele1, sign, time);
