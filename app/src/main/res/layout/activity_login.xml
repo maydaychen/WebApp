@@ -12,7 +12,7 @@
         android:layout_height="match_parent"
         android:background="#ffffff"
         android:orientation="vertical"
-        tools:context="com.example.user.webapp.LoginActivity">
+        tools:context="com.wshoto.duoyunjia.LoginActivity">
 
         <ImageView
             android:id="@+id/imageView"

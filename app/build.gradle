@@ -5,16 +5,16 @@ android {
     compileSdkVersion 26
     buildToolsVersion "26.0.0"
     defaultConfig {
-        applicationId "com.example.user.webapp"
+        applicationId "com.wshoto.duoyunjia"
         minSdkVersion 19
         targetSdkVersion 26
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
         release {
-            minifyEnabled true
+            minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
@@ -22,6 +22,14 @@ android {
     compileOptions {
         targetCompatibility 1.8
         sourceCompatibility 1.8
+    }
+    signingConfigs {
+        debug {
+            storeFile file("D:/duoyunjia.jks")
+            storePassword "android"
+            keyAlias "key0"
+            keyPassword "android"
+        }
     }
 }
 
@@ -48,6 +56,8 @@ dependencies {
     compile 'com.squareup.retrofit2:converter-gson:2.1.0'
     compile 'cz.msebera.android:httpclient:4.3.6'
     compile 'com.squareup.retrofit2:adapter-rxjava:2.1.0'
+    compile 'com.tencent.mm.opensdk:wechat-sdk-android-with-mta:+'
+    compile 'pub.devrel:easypermissions:0.4.3'
     compile project(':PushSDK')
     testCompile 'junit:junit:4.12'
 }

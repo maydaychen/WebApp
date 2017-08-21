@@ -2,5 +2,7 @@
     <string name="app_name">朵云家</string>
     <string name="alipay_result_success">支付成功</string>
     <string name="alipay_result_fail">支付失败</string>
+    <string name="permition">此应用需要获取相机及相册权限</string>
+
     <string name="alipay_result_delay">支付结果确认中</string>
 </resources>
