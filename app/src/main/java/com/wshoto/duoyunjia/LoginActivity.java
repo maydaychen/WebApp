@@ -113,7 +113,7 @@ public class LoginActivity extends AppCompatActivity {
                     if (session_time > time) {
                         finish();
                         startActivity(new Intent(LoginActivity.this, MainActivity.class));
-                    }else {
+                    } else {
                         mIvStart.setVisibility(View.GONE);
                         mRlLogin.setVisibility(View.VISIBLE);
                         Display display = getWindowManager().getDefaultDisplay();
@@ -223,6 +223,8 @@ public class LoginActivity extends AppCompatActivity {
                 sign = sign + "timestamp=" + time + "&";
                 sign = sign + "key=" + preferences.getString("auth_key", "");
                 sign = Utils.md5(sign);
+            } else if (resultBean.getInt("statusCode") == 10010) {
+                Toast.makeText(this, "请重新填写手机号！", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(this, resultBean.getString("result"), Toast.LENGTH_SHORT).show();
             }
@@ -278,7 +280,7 @@ public class LoginActivity extends AppCompatActivity {
                 handler.postDelayed(this, 1000);
             } else {
                 flag = true;
-                recLen = 10;
+                recLen = 60;
                 mBtSendYanzhengma.setClickable(true);
                 mBtSendYanzhengma.setText("获取验证码");
             }

@@ -36,12 +36,21 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
+import com.github.lzyzsd.jsbridge.BridgeWebView;
+import com.github.lzyzsd.jsbridge.BridgeWebViewClient;
+import com.github.lzyzsd.jsbridge.DefaultHandler;
+import com.google.gson.Gson;
+import com.loopj.android.http.AsyncHttpClient;
+import com.loopj.android.http.AsyncHttpResponseHandler;
+import com.loopj.android.http.RequestParams;
+import com.umeng.message.PushAgent;
 import com.wshoto.duoyunjia.alipay.AliPayManager;
 import com.wshoto.duoyunjia.alipay.AliPayMessage;
 import com.wshoto.duoyunjia.bean.AccessTokenBean;
@@ -56,14 +65,6 @@ import com.wshoto.duoyunjia.http.SubscriberOnNextListener;
 import com.wshoto.duoyunjia.wxapi.pay.WXPayEntry;
 import com.wshoto.duoyunjia.wxapi.pay.WXPayMessage;
 import com.wshoto.duoyunjia.wxapi.pay.WXUtils;
-import com.github.lzyzsd.jsbridge.BridgeWebView;
-import com.github.lzyzsd.jsbridge.BridgeWebViewClient;
-import com.github.lzyzsd.jsbridge.DefaultHandler;
-import com.google.gson.Gson;
-import com.loopj.android.http.AsyncHttpClient;
-import com.loopj.android.http.AsyncHttpResponseHandler;
-import com.loopj.android.http.RequestParams;
-import com.umeng.message.PushAgent;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
@@ -91,6 +92,7 @@ import cz.msebera.android.httpclient.Header;
 import pub.devrel.easypermissions.AfterPermissionGranted;
 import pub.devrel.easypermissions.AppSettingsDialog;
 import pub.devrel.easypermissions.EasyPermissions;
+
 
 public class MainActivity extends AppCompatActivity implements EasyPermissions.PermissionCallbacks {
 
@@ -134,6 +136,19 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     private String mUrl;
     private Bitmap bmp;
     private Boolean IS_ALI = false;
+    private Boolean IS_UPLOAD = false;
+    private Boolean NEEDS_CALL = false;
+    private JSONObject session_json;
+    private JSONObject Token_json;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+//        webView.reload();
+//        if (a > b) {
+//        refreshAccess();
+//        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -156,28 +171,76 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
             webView.loadUrl(web_url);
             IS_OK = true;
         });
+
+        session_json = new JSONObject();
+        try {
+            session_json.put("sessionkey", preferences.getString("sessionkey", ""));
+            session_json.put("timestamp", preferences.getInt("session_time", 0));
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        Token_json = new JSONObject();
+        try {
+            Token_json.put("access_token", preferences.getString("access_token", ""));
+            Token_json.put("auth_key", preferences.getString("auth_key", ""));
+            Token_json.put("timestamp", preferences.getInt("access_time", 0));
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
         getTokenOnNext = resultBean -> {
+            Log.i("chenyi", "getTokenSync: ");
             switch (resultBean.getInt("statusCode")) {
                 case 1:
-                    AccessTokenBean indexBean = gson.fromJson(resultBean.toString(), AccessTokenBean.class);
-                    editor.putString("access_token", indexBean.getResult().getAccess_token());
-                    editor.putString("auth_key", indexBean.getResult().getAuth_key());
-                    editor.putInt("access_time", indexBean.getResult().getTimestamp());
-                    editor.apply();
+                    if (NEEDS_CALL) {
+                        try {
+                            NEEDS_CALL = false;
+                            Token_json = new JSONObject();
+                            AccessTokenBean indexBean = gson.fromJson(resultBean.toString(), AccessTokenBean.class);
+                            Token_json.put("access_token", indexBean.getResult().getAccess_token());
+                            Token_json.put("auth_key", indexBean.getResult().getAuth_key());
+                            Token_json.put("timestamp", indexBean.getResult().getTimestamp());
+                            editor.putString("access_token", indexBean.getResult().getAccess_token());
+                            editor.putString("auth_key", indexBean.getResult().getAuth_key());
+                            editor.putInt("access_time", indexBean.getResult().getTimestamp());
+                            editor.apply();
+                            String result = "{\"statusCode\":\"1\", \"data\":" + Token_json.toString() + "}";
+                            Log.i("chenyi", "getTokenSync: " + result);
+                            webView.callHandler("getApiToken", result, data -> Log.i("chenyi", "getApiToken: onCallBack" + data));
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+
+                    } else {
+                        AccessTokenBean indexBean = gson.fromJson(resultBean.toString(), AccessTokenBean.class);
+                        editor.putString("access_token", indexBean.getResult().getAccess_token());
+                        editor.putString("auth_key", indexBean.getResult().getAuth_key());
+                        editor.putInt("access_time", indexBean.getResult().getTimestamp());
+                        editor.apply();
+//                        refreshSession();
+                    }
                     break;
                 case 10003:
-                    Toast.makeText(this, "服务器错误，请稍后再试...", Toast.LENGTH_SHORT).show();
+                    logout(MainActivity.this);
                     break;
             }
         };
 
+
         changeOnNext = resultBean -> {
             if (resultBean.getInt("statusCode") == 1) {
-                Toast.makeText(this, "修改成功！", Toast.LENGTH_SHORT).show();
                 LoginBean indexBean = gson.fromJson(resultBean.toString(), LoginBean.class);
                 editor.putString("sessionkey", indexBean.getResult().getSessionkey());
                 editor.putInt("session_time", indexBean.getResult().getTimestamp());
                 editor.apply();
+                if (IS_UPLOAD) {
+                    upDataHeadImg();
+                } else {
+                    webView.reload();
+                }
+            } else if (resultBean.getInt("statusCode") == 10011) {
+                logout(MainActivity.this);
             }
         };
         logoutOnNext = resultBean -> {
@@ -240,6 +303,13 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         webSettings.setUseWideViewPort(true);//设置此属性，可任意比例缩放
         webSettings.setJavaScriptEnabled(true);
         webSettings.setLoadWithOverviewMode(true);
+        webSettings.setAppCacheMaxSize(1024 * 1024 * 8);
+        String appCachePath = getApplicationContext().getCacheDir().getAbsolutePath();
+        webSettings.setAppCachePath(appCachePath);
+        webSettings.setAllowFileAccess(true);
+        webSettings.setSupportZoom(true);
+        webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
+        webSettings.setTextSize(WebSettings.TextSize.NORMAL);
         //add by wjj
         //cache mode
         //设置缓存模式
@@ -260,25 +330,27 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         String ua = webSettings.getUserAgentString();
         webSettings.setUserAgentString(ua + ";wshoto");
         webView.setDefaultHandler(new DefaultHandler());
+        webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new BridgeWebViewClient(webView) {
 
-            @Override
-            public void onPageStarted(WebView view, String url, Bitmap favicon) {
-                super.onPageStarted(view, url, favicon);
-                long a = (System.currentTimeMillis() / 1000);
-                long b = (long) preferences.getInt("session_time", 0);
-                long c = (long) preferences.getInt("access_time", 0);
-                if (a > ((a + b) / 2)) {
-                    refreshSession();
-                }
-                if (a > ((a + c) / 2)) {
-                    refreshAccess();
-                }
-                Boolean test = a > b || a > c;
-                if (test) {
-                    logout(MainActivity.this);
-                }
-            }
+            //            @Override
+//            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+//                super.onPageStarted(view, url, favicon);
+            long a = (System.currentTimeMillis() / 1000);
+            long b = (long) preferences.getInt("session_time", 0);
+
+//                long c = (long) preferences.getInt("access_time", 0);
+//                if (a > ((a + b) / 2)) {
+//                    refreshSession();
+//                }
+//                if (a > ((a + c) / 2)) {
+//                    refreshAccess();
+//                }
+//                Boolean test = (a - b > 0) || (a - c > 0);
+//                if (test) {
+//                    logout(MainActivity.this);
+//                }
+//            }
 
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -301,9 +373,76 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
             }
         });
 
-        webView.setOnLongClickListener(view -> true);
+//        webView.setOnLongClickListener(view -> true);
 
         webView.registerHandler("requestx", (responseData, function) -> net(responseData));
+        webView.registerHandler("getSessionKey", (responseData, function) -> {
+            if (preferences.getString("sessionkey", "").equals("")) {
+                String result = "{\"statusCode\":\"-1\", \"data\":\"\"}";
+                Log.i("chenyi", "getSessionSync: " + result);
+//                function.onCallBack(result);
+                webView.callHandler("getSessionKey", result, data -> Log.i("chenyi", "getSessionSync: onCallBack" + data));
+            } else {
+                String result = "{\"statusCode\":\"1\", \"data\":" + session_json.toString() + "}";
+                Log.i("chenyi", "getSessionSync: " + result);
+//                function.onCallBack(result);
+                webView.callHandler("getSessionKey", result, data -> Log.i("chenyi", "getSessionSync: onCallBack" + data));
+            }
+        });
+
+        webView.registerHandler("getApiToken", (responseData, function) -> {
+//            int time = (int) (System.currentTimeMillis() / 1000);
+//            if (preferences.getInt("access_time", 0) - time < 0) {
+            NEEDS_CALL = true;
+            refreshAccess();
+//            } else {
+//                if (preferences.getString("access_token", "").equals("")) {
+//                    String result = "{\"statusCode\":\"-1\", \"data\":\"\"}";
+//                    Log.i("chenyi", "getTokenSync: " + result);
+////                function.onCallBack(result);
+//                    webView.callHandler("getApiToken", result, data -> Log.i("chenyi", "getSessionSync: onCallBack" + data));
+//                } else {
+//                    String result = "{\"statusCode\":\"1\", \"data\":" + Token_json.toString() + "}";
+//                    Log.i("chenyi", "getTokenSync: " + result);
+////                function.onCallBack(result);
+//                    webView.callHandler("getApiToken", result, data -> Log.i("chenyi", "getSessionSync: onCallBack" + data));
+//                }
+//            }
+//            Toast.makeText(this, responseData, Toast.LENGTH_SHORT).show();
+        });
+
+        webView.registerHandler("nativeLogin", (responseData, function) -> {
+            Toast.makeText(this, "退出成功！", Toast.LENGTH_SHORT).show();
+            editor.putString("sessionkey", "");
+            editor.putString("access_token", "");
+            editor.putBoolean("autoLog", false);
+            editor.putString("auth_key", "");
+            editor.putInt("access_time", 0);
+            editor.putInt("session_time", 0);
+            if (editor.commit()) {
+                Intent intent = new Intent(this, LoginActivity.class);
+                startActivity(intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK));
+            }
+        });
+        webView.registerHandler("getUserInfo", (responseData, function) -> {
+            try {
+                JSONObject jsonObject = new JSONObject(responseData);
+                editor.putString("access_token", jsonObject.getString("access_token"));
+                editor.putString("auth_key", jsonObject.getString("auth_key"));
+                editor.putString("sessionkey", jsonObject.getString("sessionkey"));
+                editor.putString("timestamp", jsonObject.getString("timestamp"));
+                if (editor.commit()) {
+                    Toast.makeText(this, "保存成功！", Toast.LENGTH_SHORT).show();
+                }
+//                jsonObject.put("access_token", preferences.getString("access_token", ""));
+//                jsonObject.put("auth_key", preferences.getString("auth_key", ""));
+//                jsonObject.put("sessionkey", preferences.getString("sessionkey", ""));
+//                jsonObject.put("timestamp", preferences.getString("session_time", ""));
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+//            function.onCallBack(gson.toJson(jsonObject));
+        });
         webView.registerHandler("uploadImg", (responseData, function) -> {
             showType();
             //            try {
@@ -339,6 +478,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         });
         webView.registerHandler("shellQrcode", (responseData, function) -> {
             try {
+                JSONObject jsonObject = new JSONObject(responseData);
                 show(responseData);
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -395,13 +535,13 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
                     if (entry != null) {
                         Log.d("wjj", "payment3");
                         WXUtils.startWeChat(MainActivity.this, entry);
-                        function.onCallBack(RESPONSE_TEXT_SUCCESS);
+//                        function.onCallBack(RESPONSE_TEXT_SUCCESS);
                     } else {
                         function.onCallBack(RESPONSE_TEXT_FAIL);
                     }
                 } else if ("alipay_app".equals(type)) {
                     AliPayManager.getInstance().payV2(MainActivity.this, params);
-                    function.onCallBack(RESPONSE_TEXT_SUCCESS);
+//                    function.onCallBack(RESPONSE_TEXT_SUCCESS);
                 }
             } catch (JSONException e) {
                 function.onCallBack(RESPONSE_TEXT_FAIL);
@@ -571,7 +711,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
         String payString = payMessage.getJsonString();
         Log.i("chenyi", "onMoonEvent AliPayMessage " + payString);
 
-        webView.callHandler("requestx", payString, data -> {
+        webView.callHandler("payment", payString, data -> {
             Log.i("chenyi", "callHandler AliPayMessage result " + data);
         });
         //webview.send(payString);
@@ -584,7 +724,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
         Log.i("chenyi", "onMoonEvent WXPayMessage " + payString);
         //java调用js，通知服务端支付完成
-        webView.callHandler("requestx", payString, jsResponseData -> Log.i("chenyi", "callHandler WXPayMessage result " + jsResponseData));
+        webView.callHandler("payment", payString, jsResponseData -> Log.i("chenyi", "callHandler WXPayMessage result " + jsResponseData));
     }
 
     private void net(String responseData) {
@@ -743,31 +883,40 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 //                    });
                     break;
                 case 10010:
-                    logout(MainActivity.this);
+//                    logout(MainActivity.this);
+//                    refreshAccess();
                     break;
                 case 10003:
                     Toast.makeText(this, "服务器错误，请稍后再试...", Toast.LENGTH_SHORT).show();
                     break;
                 case 10005:
-                    logout(MainActivity.this);
+                    if (object.getString("result").equals("sessionkey overdue.")) {
+//                        refreshSession();
+                    } else if (object.getString("result").equals("sessionkey error.")) {
+                        logout(MainActivity.this);
+                    }
                     break;
             }
-        } catch (JSONException e) {
+        } catch (
+                JSONException e)
+
+        {
             e.printStackTrace();
         }
+
     }
 
-    private void refreshSession() {
-        int time = (int) (System.currentTimeMillis() / 1000);
-        String sign = "";
-        sign = sign + "sessionkey=" + preferences.getString("sessionkey", "") + "&";
-        sign = sign + "timestamp=" + time + "&";
-        sign = sign + "key=" + preferences.getString("auth_key", "");
-        sign = Utils.md5(sign);
-        HttpJsonMethod.getInstance().change_token(
-                new ProgressSubscriber(changeOnNext, MainActivity.this), preferences.getString("access_token", ""),
-                preferences.getString("sessionkey", ""), sign, time);
-    }
+//    private void refreshSession() {
+//        int time = (int) (System.currentTimeMillis() / 1000);
+//        String sign = "";
+//        sign = sign + "sessionkey=" + preferences.getString("sessionkey", "") + "&";
+//        sign = sign + "timestamp=" + time + "&";
+//        sign = sign + "key=" + preferences.getString("auth_key", "");
+//        sign = Utils.md5(sign);
+//        HttpJsonMethod.getInstance().change_token(
+//                new ProgressSubscriber(changeOnNext, MainActivity.this), preferences.getString("access_token", ""),
+//                preferences.getString("sessionkey", ""), sign, time);
+//    }
 
     private void refreshAccess() {
         HttpJsonMethod.getInstance().get_token(
@@ -842,6 +991,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (resultCode == RESULT_OK) {
+            IS_UPLOAD = true;
             switch (requestCode) {
 //            case 0:
 //                if (data == null) {
@@ -1071,10 +1221,11 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
      * 上传用户头像
      */
     private void upDataHeadImg() {
+        IS_UPLOAD = false;
         if (updateDialog == null) {
             updateDialog = ProgressDialog.show(MainActivity.this, "上传头像", "头像正在上传中，请稍等...", true, false);
         }
-        Log.d("wjj", "head");
+        Log.i("chenyi", "head");
         int time = (int) (System.currentTimeMillis() / 1000);
         String sign = "";
 //        sign = sign + "avatar=" + fileToBase64(bmp) + "&";
@@ -1091,7 +1242,11 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
     public void getResult(String msg) {
         String result = "{\"statusCode\":\"1\", \"data\":\"" + msg + "\"}";
-        webView.callHandler("uploadImg", result, jsResponseData -> Log.d("wjj", "uploadImg " + jsResponseData));
+        Log.i("chenyi", "getResult: " + result);
+        webView.callHandler("uploadImg", result, jsResponseData -> {
+            Log.d("wjj", "uploadImg " + jsResponseData);
+            webView.reload();
+        });
     }
 
     public boolean onKeyDown(int keyCode, KeyEvent event) {

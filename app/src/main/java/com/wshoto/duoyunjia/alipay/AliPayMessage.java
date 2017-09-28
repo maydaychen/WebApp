@@ -23,7 +23,7 @@ public class AliPayMessage {
         JSONObject payJson = new JSONObject();
         try {
             payJson.put("statusCode", errorCode+"");
-            payJson.put("data", "支付成功");
+            payJson.put("data", result);
             return payJson.toString();
         } catch(JSONException e){
             return "{\"statusCode\":\"-1\", \"data\":\"\"}";
